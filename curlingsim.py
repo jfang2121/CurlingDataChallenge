@@ -50,7 +50,7 @@ def estimate_mu_from_shot(v0, stop_distance):
 
 class Stone:
     """Represents a curling stone in 2D with position, velocity, and spin."""
-    def __init__(self, x, y, v, psi, omega, phi = 0.0, moving=True):
+    def __init__(self, x, y, v, psi, omega, team=None, phi=0.0, moving=True):
         self.x = x
         self.y = y
         self.v = v
@@ -60,6 +60,7 @@ class Stone:
         self.phi = phi
         self.xs = []
         self.ys = []
+        self.team = team
 
     def log(self):
         self.xs.append(self.x)
@@ -224,3 +225,5 @@ if __name__ == "__main__":
     s1 = Stone(x=-2, y=-0.02, v=1.5, psi=0.05, omega=+6.0)  # +omega is CW now
     s2 = Stone(x=0.40, y=0.0, v=0.0, psi=0.0, omega=0.0)
     simulate([s1, s2], dt=0.001, t_max=8.0)
+    print(s1.x, s1.y)
+    print(s2.x, s2.y)
