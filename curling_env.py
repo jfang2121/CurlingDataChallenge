@@ -135,13 +135,15 @@ class CurlingEnv(gym.Env):
         terminated = (self.stones_thrown >= self.total_stones)
         self.done = terminated
         
-        # Calculate reward (score difference for current team)
-        reward = self._calculate_reward()
-        
         # Switch teams for next throw
         if not terminated:
             self.current_team = 1 - self.current_team
+            reward = (0,0)
         
+        else:
+            # Calculate reward (score difference for current team)
+            reward = self._calculate_reward()
+
         obs = self._get_observation()
         info = self._get_info()
         truncated = False
@@ -193,14 +195,13 @@ class CurlingEnv(gym.Env):
         (score_current_team - score_opponent_team)
         
         This encourages getting closer to the house center than opponent.
+
+        Returns a tuple of score difference (team_a, team_b).
         """
         score_a = self._score_team(0)
         score_b = self._score_team(1)
         
-        if self.current_team == 0:
-            return float(score_a - score_b)
-        else:
-            return float(score_b - score_a)
+        return (float(score_a - score_b), float(score_b - score_a))
     
     def _score_team(self, team: int) -> float:
         """
@@ -225,8 +226,8 @@ class CurlingEnv(gym.Env):
             dist = math.sqrt(dx*dx + dy*dy)
             
             # Only count stones within the house
-            if dist <= self.house_radius:
-                distances.append(dist)
+            # if dist <= self.house_radius:
+            distances.append(dist)
         
         if len(distances) == 0:
             return 0.0
