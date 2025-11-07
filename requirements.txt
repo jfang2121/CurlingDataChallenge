@@ -1,3 +1,6 @@
 pygame
 numpy
 gymnasium
+torch
+torchvision
+matplotlib

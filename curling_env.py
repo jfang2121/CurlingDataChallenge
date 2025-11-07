@@ -51,19 +51,16 @@ class CurlingEnv(gym.Env):
         self.throw_line_y = 1.37
         
         # Action space: [speed (m/s), angle (radians), spin (rad/s)]
-        # Speed: 0.5 to 3.0 m/s (typical curling speeds)
-        # Angle: -0.3 to 0.3 radians (about ±17 degrees from straight)
-        # Spin: -10 to +10 rad/s (positive is clockwise)
         self.action_space = spaces.Box(
             low=np.array([0.5, 70, -10.0]),
             high=np.array([4.0, 110, 10.0]),
             dtype=np.float32
         )
         
-        # Observation space: positions and velocities of all stones + game state
+        # Observation space: positions of all stones + game state
         # For each stone: [x, y, team_id]
-        # Plus: [current_team, stones_remaining_team_a, stones_remaining_team_b]
-        obs_dim = self.total_stones * 3 + 3
+        # Plus: [current_team]
+        obs_dim = self.total_stones * 3 + 1
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -94,7 +91,7 @@ class CurlingEnv(gym.Env):
             action: [speed, angle, spin] for the stone throw
             
         Returns:
-            observation, reward, terminated, truncated, info
+            observation, reward, terminated, info
         """
         if self.done:
             raise RuntimeError("Episode is done. Call reset() before step().")
@@ -138,42 +135,41 @@ class CurlingEnv(gym.Env):
         # Switch teams for next throw
         if not terminated:
             self.current_team = 1 - self.current_team
-            reward = (0,0)
-        
+            reward = (0, 0)
         else:
             # Calculate reward (score difference for current team)
             reward = self._calculate_reward()
 
         obs = self._get_observation()
         info = self._get_info()
-        truncated = False
         
-        return obs, reward, terminated, truncated, info
+        return obs, reward, terminated, info
     
     def _get_observation(self) -> np.ndarray:
         """
         Create observation vector containing all stone states.
-        
-        Returns flattened array of stone positions/velocities and game state.
         """
         obs = []
-        
+
         # Add all stones (team A first, then team B)
-        all_stones_list = self.team_a_stones + self.team_b_stones
-        
-        for i in range(self.total_stones):
-            if i < len(all_stones_list):
-                stone = all_stones_list[i]
+        for i in range(self.stones_per_team):
+            if i < len(self.team_a_stones):
+                stone = self.team_a_stones[i]
                 obs.extend([stone.x, stone.y, float(stone.team)])
             else:
                 # Placeholder for stones not yet thrown
-                obs.extend([0.0, 0.0, -1.0])
-        
+                obs.extend([0.0, 0.0, 0.0])
+        for i in range(self.stones_per_team):
+            if i < len(self.team_b_stones):
+                stone = self.team_b_stones[i]
+                obs.extend([stone.x, stone.y, float(stone.team)])
+            else:
+                # Placeholder for stones not yet thrown
+                obs.extend([0.0, 0.0, 1.0])
+
         # Add game state info
         obs.append(float(self.current_team))
-        obs.append(float(self.stones_per_team - len(self.team_a_stones)))
-        obs.append(float(self.stones_per_team - len(self.team_b_stones)))
-        
+
         return np.array(obs, dtype=np.float32)
     
     def _get_info(self) -> Dict:
@@ -286,7 +282,7 @@ class CurlingEnv(gym.Env):
 # Example usage and testing
 if __name__ == "__main__":
     # Create environment
-    env = CurlingEnv(stones_per_team=3, render_mode="human")
+    env = CurlingEnv(stones_per_team=5, render_mode="human")
     
     print("Testing Curling Environment")
     print("="*50)
@@ -304,11 +300,11 @@ if __name__ == "__main__":
         action = actions[i]
         print(f"\nThrow {i+1}: speed={action[0]:.2f}, angle={action[1]:.3f}, spin={action[2]:.2f}")
         
-        obs, reward, terminated, truncated, info = env.step(action)
+        obs, reward, terminated, info = env.step(action)
         
         env.render()
-        print(f"Reward: {reward:.3f}")
-        
+        print(f"Reward: {reward}")
+        # print(obs)
         if terminated:
             print("\nGame Over!")
             break
