@@ -96,6 +96,7 @@ class CurlingEnv(gym.Env):
         if self.done:
             raise RuntimeError("Episode is done. Call reset() before step().")
         
+        action = action.detach().cpu().numpy()
         # Extract action parameters
         speed = float(action[0])
         angle = math.radians(float(action[1]))  # psi: heading angle
