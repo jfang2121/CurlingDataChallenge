@@ -138,7 +138,8 @@ class CurlingEnv(gym.Env):
             reward = (0, 0)
         else:
             # Calculate reward (score difference for current team)
-            reward = self._calculate_reward()
+            # reward = self._calculate_reward()
+            reward = self.game_results()
 
         obs = self._get_observation()
         info = self._get_info()
@@ -232,6 +233,43 @@ class CurlingEnv(gym.Env):
         min_dist = min(distances)
         return 1.0 / (min_dist + 0.1)  # +0.1 to avoid division by zero
     
+    def game_results(self) -> Dict[str, float]:
+        """
+        Return final scores for both teams at the end of the game.
+        Sort the stones for both teams by distance to house center.
+        If the closest n stones belong to one team, that team scores n points.
+        0 points if the closest stone is from the opponent.
+        """
+        all_stones = self.team_a_stones + self.team_b_stones
+        if len(all_stones) == 0:
+            return {
+                'team_a_score': 0.0,
+                'team_b_score': 0.0,
+            }
+        # Calculate distances to house center
+        stone_distances = []
+        for stone in all_stones:
+            dx = stone.x - self.house_center[0]
+            dy = stone.y - self.house_center[1]
+            dist = math.sqrt(dx*dx + dy*dy)
+            stone_distances.append((dist, stone.team))
+        # Sort by distance
+        stone_distances.sort(key=lambda x: x[0])
+        # Determine scoring
+        scoring_team = stone_distances[0][1]
+        team_a_score = 0.0
+        team_b_score = 0.0
+        for dist, team in stone_distances:
+            if team == scoring_team:
+                if team == 0:
+                    team_a_score += 1.0
+                else:
+                    team_b_score += 1.0
+            else:
+                break  # Stop counting when opponent's stone is reached
+
+        return (team_a_score, team_b_score)
+
     def get_stone_positions(self) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
         """
         Get current positions of all stones for both teams.

@@ -198,21 +198,21 @@ class PPO_Agent:
         """
         Update policy using trajectories from both teams.
         
-        Key insight: Both teams' experiences are valid training data for the
+        Both teams' experiences are valid training data for the
         same network, just from different perspectives (indicated by team_id).
         """
-        # Get data from both buffers
-        data = trajectory_buffer.generate_batch()
-        
-        advantages = self.compute_gae(data['rewards'], data['values'], data['dones'])
 
-        # Normalize advantages (across both teams)
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
-        # PPO update for multiple epochs
         stats = {'policy_loss': [], 'value_loss': [], 'entropy': [], 'approx_kl': []}
         
         for _ in range(self.ppo_epochs):
+            # Get data from both buffers
+            data = trajectory_buffer.generate_batch()
+            
+            advantages = self.compute_gae(data['rewards'], data['values'], data['dones'])
+
+            # Normalize advantages (across both teams)
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
             # Mini-batch updates
             for batch in data['batches']:
                 
@@ -259,3 +259,6 @@ class PPO_Agent:
 
         # Return averaged statistics
         return {k: np.mean(v) for k, v in stats.items()}
+    
+    def save(self, filepath):
+        torch.save(self.policy.state_dict(), filepath)
