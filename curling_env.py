@@ -125,6 +125,8 @@ class CurlingEnv(gym.Env):
             self.team_a_stones.append(new_stone)
         else:
             self.team_b_stones.append(new_stone)
+            
+        boundary_penalty = self.boundry_penalty(new_stone)
         
         # Update game state
         self.stones_thrown += 1
@@ -135,12 +137,19 @@ class CurlingEnv(gym.Env):
         
         # Switch teams for next throw
         if not terminated:
+            if self.current_team == 0:
+                reward = (boundary_penalty, 0)
+            else:
+                reward = (0, boundary_penalty)
             self.current_team = 1 - self.current_team
-            reward = (0, 0)
         else:
             # Calculate reward (score difference for current team)
             # reward = self._calculate_reward()
-            reward = self.game_results()
+            # reward = self.game_results()
+            if self.current_team == 0:
+                reward = (boundary_penalty, 0)
+            else:
+                reward = (0, boundary_penalty)
 
         obs = self._get_observation()
         info = self._get_info()
@@ -233,6 +242,20 @@ class CurlingEnv(gym.Env):
         # Simple scoring: inverse of minimum distance (closer is better)
         min_dist = min(distances)
         return 1.0 / (min_dist + 0.1)  # +0.1 to avoid division by zero
+    
+    def boundry_penalty(self, stone: Stone) -> float:
+        """
+        Calculate penalty if stone goes out of bounds.
+        Returns a negative reward proportional to how far out of bounds.
+        """
+        penalty = 0.0
+        # if abs(stone.x) > self.sheet_width / 2:
+        #     penalty -= 1.0 * (abs(stone.x) - self.sheet_width / 2)
+        # if stone.y < 0 or stone.y > self.sheet_length:
+        #     penalty -= 1.0 * min(abs(stone.y), abs(stone.y - self.sheet_length))
+        if abs(stone.x) > self.sheet_width / 2 or stone.y < 0 or stone.y > self.sheet_length:
+            penalty -= 1.0  # flat penalty for going out of bounds
+        return penalty
     
     def game_results(self) -> Dict[str, float]:
         """

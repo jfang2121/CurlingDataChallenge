@@ -14,8 +14,11 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
     # print(len(state))
     done = False
     current_team = env.current_team
-    
+
     step_count = 0
+
+    team_1_rewards = 0
+    team_2_rewards = 0
     
     while not done:
         # Convert state to tensor
@@ -31,7 +34,6 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         next_state, reward, done, info = env.step(action[0])
 
         # Store in appropriate buffer
-        # Note: Intermediate rewards are 0, only terminal reward matters
         state = state.detach().numpy()
         action = action.detach().numpy()
         log_prob = log_prob.detach().numpy()
@@ -39,8 +41,10 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         
         if current_team == 0:
             buffer.add(state, action[0], log_prob, value, reward[0], done)
+            team_1_rewards += reward[0]
         else:
             buffer.add(state, action[0], log_prob, value, reward[1], done)
+            team_2_rewards += reward[1]
 
         state = next_state
         current_team = env.current_team
@@ -48,8 +52,10 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
 
     game_info = {
         'steps': step_count,
-        'team1_reward': reward[0],
-        'team2_reward': reward[1],
+        'team1_result': reward[0],
+        'team2_result': reward[1],
+        'team1_reward': team_1_rewards,
+        'team2_reward': team_2_rewards,
         'team1_score': info['score_team_a'],
         'team2_score': info['score_team_b'],
     }
@@ -72,7 +78,7 @@ if __name__ == "__main__":
     LEARNING_RATE = 3e-4
     
     # PPO config
-    GAMMA = 1.0  # No discounting for terminal rewards
+    GAMMA = 0.99  # No discounting for terminal rewards
     GAE_LAMBDA = 0.95
     CLIP_EPSILON = 0.2
     VALUE_COEF = 0.5
@@ -80,9 +86,9 @@ if __name__ == "__main__":
     PPO_EPOCHS = 4
     BATCH_SIZE = 64
 
-    n_games = 500
+    n_games = 1000
 
-    file_path = f"models/ppo_agent_{n_games}.pth"
+    file_path = f"models/ppo_agent_selfplay_{n_games}.pth"
 
     env = CurlingEnv(stones_per_team=stones_per_team, render_mode=None)
 
@@ -106,7 +112,7 @@ if __name__ == "__main__":
     trajectory_buffer = TrajectoryBuffer(BATCH_SIZE)
 
     learn_iters = 0
-    N = 10
+    N = 20
 
     team_1_rewards = []
     team_2_rewards = []
@@ -119,12 +125,15 @@ if __name__ == "__main__":
 
         # Log game info
         print(f"Game {game} - Steps: {game_info['steps']}, Team 1 Reward: {game_info['team1_reward']}, Team 2 Reward: {game_info['team2_reward']}")
+        print(f"Results - Team 1: {game_info['team1_result']}, Team 2: {game_info['team2_result']}")
+
         team_1_rewards.append(game_info['team1_reward'])
         team_2_rewards.append(game_info['team2_reward'])
         team_1_scores.append(game_info['team1_score'])
         team_2_scores.append(game_info['team2_score'])
         if game % N == 0:
-            trainer.update(trajectory_buffer)
+            stats = trainer.update(trajectory_buffer)
+            print(f"Training stats after iteration {learn_iters}: {stats}")
             learn_iters += 1
             trajectory_buffer.clear()
             print(f"Learning iteration {learn_iters} completed.")
