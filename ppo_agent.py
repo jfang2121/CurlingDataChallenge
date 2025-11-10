@@ -74,14 +74,23 @@ class ActorCritic(nn.Module):
         
         # Scale from [-1, 1] to [action_low, action_high]
         action = tanh_action * self.action_scale.to(self.device) + self.action_bias.to(self.device)
+        return action
         
+    def get_log_prob(self, dist, action):
         # For log_prob with tanh squashing, apply correction
-        u = dist.rsample()
+
+        # Inverse transform action [-1, 1]
+        tanh_action = (action - self.action_bias.to(action.device)) / self.action_scale.to(action.device)
+
+        # Apply atanh safely
+        u = torch.clamp(tanh_action, -0.999, 0.999)
+        u = 0.5 * torch.log((1 + u) / (1 - u))
+
         log_prob = dist.log_prob(u).sum(dim=-1)
         log_prob -= torch.log(self.action_scale.to(action.device) * (1 - tanh_action.pow(2)) + 1e-6).sum(dim=-1)
         entropy = dist.entropy().mean()
 
-        return action, log_prob, entropy
+        return log_prob, entropy
 
 
 # ============================================================================
@@ -218,14 +227,18 @@ class PPO_Agent:
                 
                 # Convert to tensors
                 batch_states = torch.tensor(data['states'][batch]).to(self.policy.device)
-                # batch_actions = torch.tensor(data['actions'][batch]).to(self.policy.device)
+                batch_actions = torch.tensor(data['actions'][batch]).to(self.policy.device)
                 batch_values = torch.tensor(data['values'][batch]).to(self.policy.device)
                 batch_old_log_probs = torch.tensor(data['log_probs'][batch]).to(self.policy.device)
                 batch_advantages = torch.tensor(advantages[batch]).to(self.policy.device)
                 
                 # Forward pass
                 dist, values = self.policy(batch_states)
-                _, new_log_probs, entropy = self.policy.get_action(dist)
+                # print(values.shape)
+                # print(dist.mean.shape)
+                # print(batch_actions)
+                new_log_probs, entropy = self.policy.get_log_prob(dist, batch_actions)
+                # print(new_log_probs.shape)
                 
                 # Policy loss (PPO clipped objective)
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)

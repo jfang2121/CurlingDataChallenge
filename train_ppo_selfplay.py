@@ -22,16 +22,17 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
     
     while not done:
         # Convert state to tensor
-        state = torch.FloatTensor(state).unsqueeze(0).to(device)
+        state = torch.FloatTensor(state).to(device)
 
         # Get action from policy
         dist, value = policy(state)
-        action, log_prob, entropy = policy.get_action(dist)
+        action = policy.get_action(dist)
+        log_prob, _ = policy.get_log_prob(dist, action)
 
-        # print(action[0])
+        # print(action)
 
         # Step environment
-        next_state, reward, done, info = env.step(action[0])
+        next_state, reward, done, info = env.step(action)
 
         # Store in appropriate buffer
         state = state.detach().numpy()
@@ -40,10 +41,10 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         value = value.detach().numpy()
         
         if current_team == 0:
-            buffer.add(state, action[0], log_prob, value, reward[0], done)
+            buffer.add(state, action, log_prob, value, reward[0], done)
             team_1_rewards += reward[0]
         else:
-            buffer.add(state, action[0], log_prob, value, reward[1], done)
+            buffer.add(state, action, log_prob, value, reward[1], done)
             team_2_rewards += reward[1]
 
         state = next_state
@@ -84,9 +85,9 @@ if __name__ == "__main__":
     VALUE_COEF = 0.5
     ENTROPY_COEF = 0.01
     PPO_EPOCHS = 4
-    BATCH_SIZE = 64
+    BATCH_SIZE = 5
 
-    n_games = 1000
+    n_games = 10
 
     file_path = f"models/ppo_agent_selfplay_{n_games}.pth"
 
@@ -112,7 +113,7 @@ if __name__ == "__main__":
     trajectory_buffer = TrajectoryBuffer(BATCH_SIZE)
 
     learn_iters = 0
-    N = 20
+    N = 5
 
     team_1_rewards = []
     team_2_rewards = []
@@ -132,6 +133,14 @@ if __name__ == "__main__":
         team_1_scores.append(game_info['team1_score'])
         team_2_scores.append(game_info['team2_score'])
         if game % N == 0:
+            batch = trajectory_buffer.generate_batch()
+            # print(batch['states'].shape)
+            # print(batch['actions'].shape)
+            # print(batch['rewards'].shape)
+            # print(batch['log_probs'].shape)
+            # print(batch['values'].shape)
+            # print(batch['batches'])
+
             stats = trainer.update(trajectory_buffer)
             print(f"Training stats after iteration {learn_iters}: {stats}")
             learn_iters += 1
