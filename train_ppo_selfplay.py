@@ -23,13 +23,20 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
     while not done:
         # Convert state to tensor
         state = torch.FloatTensor(state).to(device)
+        assert not torch.isnan(state).any(), "State contains NaN"
+        assert not torch.isinf(state).any(), "State contains Inf"
 
         # Get action from policy
         dist, value = policy(state)
         action = policy.get_action(dist)
         log_prob, _ = policy.get_log_prob(dist, action)
 
-        # print(action)
+        assert not torch.isnan(action).any(), "Action contains NaN"
+        assert not torch.isinf(action).any(), "Action contains Inf"
+        assert not torch.isnan(log_prob).any(), "Log prob contains NaN"
+        assert not torch.isinf(log_prob).any(), "Log prob contains Inf"
+        assert not torch.isnan(value).any(), "Value contains NaN"
+        assert not torch.isinf(value).any(), "Value contains Inf"
 
         # Step environment
         next_state, reward, done, info = env.step(action)
@@ -76,7 +83,7 @@ if __name__ == "__main__":
     HIDDEN_DIM = 256
     
     # Training config
-    LEARNING_RATE = 3e-4
+    LEARNING_RATE = 1e-5
     
     # PPO config
     GAMMA = 0.99  # No discounting for terminal rewards
@@ -85,9 +92,9 @@ if __name__ == "__main__":
     VALUE_COEF = 0.5
     ENTROPY_COEF = 0.01
     PPO_EPOCHS = 4
-    BATCH_SIZE = 5
+    BATCH_SIZE = 32
 
-    n_games = 10
+    n_games = 5000
 
     file_path = f"models/ppo_agent_selfplay_{n_games}.pth"
 

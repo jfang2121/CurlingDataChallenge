@@ -188,8 +188,6 @@ class CurlingEnv(gym.Env):
         return {
             'current_team': self.current_team,
             'stones_thrown': self.stones_thrown,
-            'team_a_count': len(self.team_a_stones),
-            'team_b_count': len(self.team_b_stones),
             'score_team_a': self._score_team(0),
             'score_team_b': self._score_team(1),
         }
@@ -249,12 +247,12 @@ class CurlingEnv(gym.Env):
         Returns a negative reward proportional to how far out of bounds.
         """
         penalty = 0.0
-        # if abs(stone.x) > self.sheet_width / 2:
-        #     penalty -= 1.0 * (abs(stone.x) - self.sheet_width / 2)
-        # if stone.y < 0 or stone.y > self.sheet_length:
-        #     penalty -= 1.0 * min(abs(stone.y), abs(stone.y - self.sheet_length))
-        if abs(stone.x) > self.sheet_width / 2 or stone.y < 0 or stone.y > self.sheet_length:
-            penalty -= 1.0  # flat penalty for going out of bounds
+        if abs(stone.x) > self.sheet_width / 2:
+            penalty -= 1.0 * (abs(stone.x) - self.sheet_width / 2)
+        if stone.y < 0 or stone.y > self.sheet_length:
+            penalty -= 1.0 * min(abs(stone.y), abs(stone.y - self.sheet_length))
+        # if abs(stone.x) > self.sheet_width / 2 or stone.y < 0 or stone.y > self.sheet_length:
+        #     penalty -= 1.0  # flat penalty for going out of bounds
         return penalty
     
     def game_results(self) -> Dict[str, float]:
