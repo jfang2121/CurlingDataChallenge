@@ -25,7 +25,7 @@ class CurlingEnv(gym.Env):
         stones_per_team: int = 8,
         sheet_length: float = 45.72,  # meters (standard curling sheet)
         sheet_width: float = 4.75,      # meters
-        house_center: Tuple[float, float] = (0.0, 34.75),  # center of target
+        button: Tuple[float, float] = (0.0, 34.75),  # center of target
         house_radius: float = 1.83,    # meters (12 foot diameter)
         render_mode: Optional[str] = None
     ):
@@ -35,7 +35,7 @@ class CurlingEnv(gym.Env):
         self.total_stones = stones_per_team * 2
         self.sheet_length = sheet_length
         self.sheet_width = sheet_width
-        self.house_center = np.array(house_center)
+        self.button = np.array(button)
         self.house_radius = house_radius
         self.render_mode = render_mode
         
@@ -126,7 +126,8 @@ class CurlingEnv(gym.Env):
         else:
             self.team_b_stones.append(new_stone)
             
-        boundary_penalty = self.boundry_penalty(new_stone)
+        boundary_penalty = self.boundary_penalty(new_stone)
+        distance_reward = self.dist_reward(new_stone)
         
         # Update game state
         self.stones_thrown += 1
@@ -138,18 +139,16 @@ class CurlingEnv(gym.Env):
         # Switch teams for next throw
         if not terminated:
             if self.current_team == 0:
-                reward = (boundary_penalty, 0)
+                reward = (distance_reward, 0)
             else:
-                reward = (0, boundary_penalty)
+                reward = (0, distance_reward)
+
             self.current_team = 1 - self.current_team
         else:
-            # Calculate reward (score difference for current team)
-            # reward = self._calculate_reward()
-            # reward = self.game_results()
             if self.current_team == 0:
-                reward = (boundary_penalty, 0)
+                reward = (distance_reward, 0)
             else:
-                reward = (0, boundary_penalty)
+                reward = (0, distance_reward)
 
         obs = self._get_observation()
         info = self._get_info()
@@ -226,8 +225,8 @@ class CurlingEnv(gym.Env):
         # Calculate distances to house center for this team
         distances = []
         for stone in team_stones:
-            dx = stone.x - self.house_center[0]
-            dy = stone.y - self.house_center[1]
+            dx = stone.x - self.button[0]
+            dy = stone.y - self.button[1]
             dist = math.sqrt(dx*dx + dy*dy)
             
             # Only count stones within the house
@@ -241,7 +240,7 @@ class CurlingEnv(gym.Env):
         min_dist = min(distances)
         return 1.0 / (min_dist + 0.1)  # +0.1 to avoid division by zero
     
-    def boundry_penalty(self, stone: Stone) -> float:
+    def boundary_penalty(self, stone: Stone) -> float:
         """
         Calculate penalty if stone goes out of bounds.
         Returns a negative reward proportional to how far out of bounds.
@@ -254,6 +253,17 @@ class CurlingEnv(gym.Env):
         # if abs(stone.x) > self.sheet_width / 2 or stone.y < 0 or stone.y > self.sheet_length:
         #     penalty -= 1.0  # flat penalty for going out of bounds
         return penalty
+    
+    def dist_reward(self, stone: Stone) -> float:
+        """
+        Calculate reward based on distance to button.
+        Closer stones get higher rewards.
+        """
+        dx = stone.x - self.button[0]
+        dy = stone.y - self.button[1]
+        dist = math.sqrt(dx*dx + dy*dy)
+        # Reward is inverse of distance (closer is better)
+        return 1.0 / (dist + 0.1)  # +0.1 to avoid division by zero
     
     def game_results(self) -> Dict[str, float]:
         """
@@ -271,8 +281,8 @@ class CurlingEnv(gym.Env):
         # Calculate distances to house center
         stone_distances = []
         for stone in all_stones:
-            dx = stone.x - self.house_center[0]
-            dy = stone.y - self.house_center[1]
+            dx = stone.x - self.button[0]
+            dy = stone.y - self.button[1]
             dist = math.sqrt(dx*dx + dy*dy)
             stone_distances.append((dist, stone.team))
         # Sort by distance
@@ -318,21 +328,21 @@ class CurlingEnv(gym.Env):
             print(f"\nTeam A stones ({len(self.team_a_stones)}):")
             for i, stone in enumerate(self.team_a_stones):
                 dist = math.sqrt(
-                    (stone.x - self.house_center[0])**2 + 
-                    (stone.y - self.house_center[1])**2
+                    (stone.x - self.button[0])**2 + 
+                    (stone.y - self.button[1])**2
                 )
                 print(f"  {i+1}. Position: ({stone.x:.2f}, {stone.y:.2f}), "
-                      f"Distance to house: {dist:.2f}m")
+                      f"Distance to button: {dist:.2f}m")
             
             print(f"\nTeam B stones ({len(self.team_b_stones)}):")
             for i, stone in enumerate(self.team_b_stones):
                 dist = math.sqrt(
-                    (stone.x - self.house_center[0])**2 + 
-                    (stone.y - self.house_center[1])**2
+                    (stone.x - self.button[0])**2 + 
+                    (stone.y - self.button[1])**2
                 )
                 print(f"  {i+1}. Position: ({stone.x:.2f}, {stone.y:.2f}), "
-                      f"Distance to house: {dist:.2f}m")
-            
+                      f"Distance to button: {dist:.2f}m")
+
             scores = self._get_info()
             print(f"\nScores - Team A: {scores['score_team_a']:.3f}, "
                   f"Team B: {scores['score_team_b']:.3f}")

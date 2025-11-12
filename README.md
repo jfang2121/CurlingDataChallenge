@@ -16,24 +16,24 @@ This repository provides a reinforcement learning environment and training pipel
    ```
 2. Train the PPO agent:
    ```
-   python train_ppo.py
+   python train_ppo_selfplay.py
    ```
    This will run self-play training and save model checkpoints and plots.
 
 ## File Overview
 - `curling_env.py`: Curling environment for RL, including physics and scoring.
 - `ppo_agent.py`: PPO agent and neural network definitions.
-- `train_ppo.py`: Main training loop for self-play PPO.
+- `train_ppo_selfplay.py`: Main training loop for self-play PPO.
 - `curlingsim.py`: Physics simulation for curling stones.
 - `requirements.txt`: Python dependencies.
 - `models/`: Saved model checkpoints.
 
 ## Output
-- Trained model weights (`ppo_agent_{n_games}.pth`)
+- Trained model weights (`ppo_agent_selfplay{n_games}.pth`)
 - Reward and score plots (`ppo_rewards_{n_games}.png`, `ppo_scores_{n_games}.png`)
 
 ## Usage
-You can modify the number of games, hyperparameters, or environment settings in `train_ppo.py` to experiment with different training setups.
+You can modify the number of games, hyperparameters, or environment settings in `train_ppo_selfplay.py` to experiment with different training setups.
 
 ---
     
