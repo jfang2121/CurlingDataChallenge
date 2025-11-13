@@ -15,7 +15,8 @@ import torch.optim as optim
 class ActorCritic(nn.Module):
     """Actor-Critic network for PPO."""
 
-    def __init__(self, obs_dim: int, action_dim: int, alpha, hidden_size: int = 256):
+    def __init__(self, obs_dim: int, action_dim: int, alpha, hidden_size: int = 256, 
+                 action_bin=(10, 10, 10)):
         super().__init__()
 
         # Shared feature extractor
@@ -28,15 +29,12 @@ class ActorCritic(nn.Module):
             nn.ReLU()
         )
 
-        # Actor head (policy)
-        self.actor_mean = nn.Sequential(
+        # Actor head: output logits for each bin per action dimension
+        self.actor_logits = nn.Sequential(
             nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
-            nn.Linear(hidden_size // 2, action_dim)
+            nn.Linear(hidden_size // 2, sum(action_bin))
         )
-
-        # Log standard deviation (learnable)
-        self.actor_log_std = nn.Parameter(torch.zeros(action_dim))
 
         # Critic head (value function)
         self.critic = nn.Sequential(
@@ -46,8 +44,11 @@ class ActorCritic(nn.Module):
         )
 
         # Action bounds for the curling environment
+        # Speed, angle, spin
         self.action_low = torch.tensor([2.0, 85, -3.0])
         self.action_high = torch.tensor([4.0, 95, 3.0])
+        self.n_bins = action_bin  # Number of bins per action dimension
+        self.total_bins = sum(self.n_bins)
         self.action_scale = (self.action_high - self.action_low) / 2.0
         self.action_bias = (self.action_high + self.action_low) / 2.0
 
@@ -57,41 +58,33 @@ class ActorCritic(nn.Module):
 
     def forward(self, obs):
         features = self.shared(obs)
-        
-        # Actor: output mean of action distribution
-        action_mean = self.actor_mean(features)
-        std = F.softplus(torch.exp(self.actor_log_std))
-        
-        # Create distribution (without tanh squashing here)
-        dist = torch.distributions.Normal(action_mean, std)
-        
-        # Critic: output value estimate
+        logits = self.actor_logits(features)
+        # Split logits for each action dimension
+        split_logits = torch.split(logits, self.n_bins, dim=-1)
+        # Create categorical distributions for each action dimension
+        dists = [torch.distributions.Categorical(logits=logit) for logit in split_logits]
         value = self.critic(features)
+        return dists, value
     
-        return dist, value
-    
-    def get_action(self, dist):
-        """Sample an action from a tanh-squashed Gaussian distribution."""
-        tanh_action = torch.tanh(dist.rsample())
-        
-        # Scale from [-1, 1] to [action_low, action_high]
-        action = tanh_action * self.action_scale.to(self.device) + self.action_bias.to(self.device)
-        return action
-        
-    def get_log_prob(self, dist, action):
-        # For log_prob with tanh squashing, apply correction
+    def get_action(self, dists):
+        # Sample discrete bin indices for each action dimension
+        bin_indices = [dist.sample() for dist in dists]
+        bin_indices_tensor = torch.stack(bin_indices, dim=-1)
+        # Map bin indices to physical action values
+        action = []
+        for i, bins in enumerate(self.n_bins):
+            low = self.action_low[i]
+            high = self.action_high[i]
+            val = low + (high - low) * bin_indices_tensor[..., i].float() / (bins - 1)
+            action.append(val)
+        action = torch.stack(action, dim=-1)
+        return action, bin_indices_tensor
 
-        # Inverse transform action [-1, 1]
-        tanh_action = (action - self.action_bias.to(action.device)) / self.action_scale.to(action.device)
-
-        # Apply atanh safely
-        u = torch.clamp(tanh_action, -0.999, 0.999)
-        u = 0.5 * torch.log((1 + u) / (1 - u))
-
-        log_prob = dist.log_prob(u).sum(dim=-1)
-        log_prob -= torch.log(self.action_scale.to(action.device) * (1 - tanh_action.pow(2)) + 1e-6).sum(dim=-1)
-        entropy = dist.entropy().mean()
-
+    def get_log_prob(self, dists, bin_indices_tensor):
+        # Compute log probability for each action dimension
+        log_probs = [dist.log_prob(bin_indices_tensor[..., i]) for i, dist in enumerate(dists)]
+        log_prob = torch.stack(log_probs, dim=-1).sum(dim=-1)
+        entropy = torch.stack([dist.entropy() for dist in dists], dim=-1).mean()
         return log_prob, entropy
 
 
@@ -235,9 +228,9 @@ class PPO_Agent:
                 batch_advantages = torch.tensor(advantages[batch]).to(self.policy.device)
                 
                 # Forward pass
-                dist, values = self.policy(batch_states)
+                dists, values = self.policy(batch_states)
 
-                new_log_probs, entropy = self.policy.get_log_prob(dist, batch_actions)
+                new_log_probs, entropy = self.policy.get_log_prob(dists, batch_actions)
                 
                 # Policy loss (PPO clipped objective)
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)
@@ -282,16 +275,17 @@ if __name__ == "__main__":
     ACTION_DIM = 3
     HIDDEN_DIM = 256
     action_bin = (10, 10, 10)
-    model = ActorCritic(STATE_DIM, ACTION_DIM, alpha=3e-4, hidden_size=HIDDEN_DIM)
+    model = ActorCritic(STATE_DIM, ACTION_DIM, alpha=3e-4, hidden_size=HIDDEN_DIM, action_bin=action_bin)
     print(model)
 
     # Test forward pass with dummy input
     dummy_state = torch.randn(2, STATE_DIM).to(model.device)
     dists, value = model(dummy_state)
-    action = model.get_action(dists)
-    log_prob, entropy = model.get_log_prob(dists, action)
+    action, bin_indices = model.get_action(dists)
+    log_prob, entropy = model.get_log_prob(dists, bin_indices)
     print("Dists:", dists)
     print("Action:", action)
+    print("Bin Indices:", bin_indices)
     print("Value:", value)
     print("Log Prob:", log_prob)
     print("Entropy:", entropy)
