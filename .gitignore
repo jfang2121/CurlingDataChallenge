@@ -1,2 +1,5 @@
 *.pyc
 *.pth
+*/__pycache__/
+wandb/
+plots/

@@ -25,7 +25,7 @@ class CurlingEnv(gym.Env):
         stones_per_team: int = 8,
         sheet_length: float = 45.72,  # meters (standard curling sheet)
         sheet_width: float = 4.75,      # meters
-        button: Tuple[float, float] = (0.0, 34.75),  # center of target
+        button: Tuple[float, float] = (0.0, 34.747),  # center of target
         house_radius: float = 1.83,    # meters (12 foot diameter)
         render_mode: Optional[str] = None
     ):
@@ -95,8 +95,7 @@ class CurlingEnv(gym.Env):
         """
         if self.done:
             raise RuntimeError("Episode is done. Call reset() before step().")
-        
-        action = action.detach().cpu().numpy()
+
         # Extract action parameters
         speed = float(action[0])
         angle = math.radians(float(action[1]))  # psi: heading angle
@@ -187,58 +186,9 @@ class CurlingEnv(gym.Env):
         return {
             'current_team': self.current_team,
             'stones_thrown': self.stones_thrown,
-            'score_team_a': self._score_team(0),
-            'score_team_b': self._score_team(1),
+            'results_team_a': self.game_results()[0],
+            'results_team_b': self.game_results()[1],
         }
-    
-    def _calculate_reward(self) -> float:
-        """
-        Calculate reward based on current stone positions.
-        
-        For the current team that just threw, reward is:
-        (score_current_team - score_opponent_team)
-        
-        This encourages getting closer to the house center than opponent.
-
-        Returns a tuple of score difference (team_a, team_b).
-        """
-        score_a = self._score_team(0)
-        score_b = self._score_team(1)
-        
-        return (float(score_a - score_b), float(score_b - score_a))
-    
-    def _score_team(self, team: int) -> float:
-        """
-        Calculate score for a team based on distance to house center.
-        
-        In curling, only stones closer than the opponent's closest stone count.
-        For RL training, we use a continuous reward based on inverse distance.
-        """
-        if team == 0:
-            team_stones = self.team_a_stones
-        else:
-            team_stones = self.team_b_stones
-        
-        if len(team_stones) == 0:
-            return 0.0
-        
-        # Calculate distances to house center for this team
-        distances = []
-        for stone in team_stones:
-            dx = stone.x - self.button[0]
-            dy = stone.y - self.button[1]
-            dist = math.sqrt(dx*dx + dy*dy)
-            
-            # Only count stones within the house
-            # if dist <= self.house_radius:
-            distances.append(dist)
-        
-        if len(distances) == 0:
-            return 0.0
-        
-        # Simple scoring: inverse of minimum distance (closer is better)
-        min_dist = min(distances)
-        return 1.0 / (min_dist + 0.1)  # +0.1 to avoid division by zero
     
     def boundary_penalty(self, stone: Stone) -> float:
         """
@@ -261,9 +211,8 @@ class CurlingEnv(gym.Env):
         """
         dx = stone.x - self.button[0]
         dy = stone.y - self.button[1]
-        dist = math.sqrt(dx*dx + dy*dy)
-        # Reward is inverse of distance (closer is better)
-        return 1.0 / (dist + 0.1)  # +0.1 to avoid division by zero
+        dist = dx*dx + dy*dy
+        return - dist
     
     def game_results(self) -> Dict[str, float]:
         """
@@ -274,10 +223,7 @@ class CurlingEnv(gym.Env):
         """
         all_stones = self.team_a_stones + self.team_b_stones
         if len(all_stones) == 0:
-            return {
-                'team_a_score': 0.0,
-                'team_b_score': 0.0,
-            }
+            return (0.0, 0.0)
         # Calculate distances to house center
         stone_distances = []
         for stone in all_stones:

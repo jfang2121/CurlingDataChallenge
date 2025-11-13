@@ -45,8 +45,8 @@ class ActorCritic(nn.Module):
 
         # Action bounds for the curling environment
         # Speed, angle, spin
-        self.action_low = torch.tensor([2.0, 85, -3.0])
-        self.action_high = torch.tensor([4.0, 95, 3.0])
+        self.action_low = torch.tensor([2.8, 85, -3.0])
+        self.action_high = torch.tensor([3.2, 95, 3.0])
         self.n_bins = action_bin  # Number of bins per action dimension
         self.total_bins = sum(self.n_bins)
         self.action_scale = (self.action_high - self.action_low) / 2.0
@@ -222,7 +222,7 @@ class PPO_Agent:
                 
                 # Convert to tensors
                 batch_states = torch.tensor(data['states'][batch]).to(self.policy.device)
-                batch_actions = torch.tensor(data['actions'][batch]).to(self.policy.device)
+                batch_bin_indices = torch.tensor(data['actions'][batch]).to(self.policy.device)
                 batch_values = torch.tensor(data['values'][batch]).to(self.policy.device)
                 batch_old_log_probs = torch.tensor(data['log_probs'][batch]).to(self.policy.device)
                 batch_advantages = torch.tensor(advantages[batch]).to(self.policy.device)
@@ -230,8 +230,8 @@ class PPO_Agent:
                 # Forward pass
                 dists, values = self.policy(batch_states)
 
-                new_log_probs, entropy = self.policy.get_log_prob(dists, batch_actions)
-                
+                new_log_probs, entropy = self.policy.get_log_prob(dists, batch_bin_indices)
+
                 # Policy loss (PPO clipped objective)
                 ratio = torch.exp(new_log_probs - batch_old_log_probs)
                 weighted_probs = ratio * batch_advantages

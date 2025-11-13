@@ -1,5 +1,5 @@
 from curling_env import CurlingEnv
-from ppo_agent import PPO_Agent, TrajectoryBuffer, ActorCritic
+from ppo_agent_discrete import PPO_Agent, TrajectoryBuffer, ActorCritic
 import torch
 import matplotlib.pyplot as plt
 import wandb
@@ -29,9 +29,9 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         assert not torch.isinf(state).any(), "State contains Inf"
 
         # Get action from policy
-        dist, value = policy(state)
-        action = policy.get_action(dist)
-        log_prob, _ = policy.get_log_prob(dist, action)
+        dists, value = policy(state)
+        action, bin_indices = policy.get_action(dists)
+        log_prob, _ = policy.get_log_prob(dists, bin_indices)
 
         assert not torch.isnan(action).any(), "Action contains NaN"
         assert not torch.isinf(action).any(), "Action contains Inf"
@@ -50,10 +50,10 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         value = value.detach().numpy()
         
         if current_team == 0:
-            buffer.add(state, action, log_prob, value, reward[0], done)
+            buffer.add(state, bin_indices, log_prob, value, reward[0], done)
             team_1_rewards += reward[0]
         else:
-            buffer.add(state, action, log_prob, value, reward[1], done)
+            buffer.add(state, bin_indices, log_prob, value, reward[1], done)
             team_2_rewards += reward[1]
 
         state = next_state
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     HIDDEN_DIM = 256
     
     # Training config
-    LEARNING_RATE = 1e-5
+    LEARNING_RATE = 1e-4
     
     # PPO config
     GAMMA = 0.99
@@ -92,16 +92,16 @@ if __name__ == "__main__":
     VALUE_COEF = 0.5
     ENTROPY_COEF = 0.01
     PPO_EPOCHS = 4
-    BATCH_SIZE = 32
+    BATCH_SIZE = 64
 
-    n_games = 5000
+    n_games = 10000
 
-    file_path = f"models/ppo_agent_selfplay_{n_games}_dist.pth"
+    file_path = f"models/ppo_discrete_selfplay_{n_games}_dist.pth"
 
     # Initialize wandb
     wandb.init(
         project="curling-ppo",
-        name=f"selfplay_{n_games}_games",
+        name=f"selfplay_{n_games}_games_dist",
         config={
             "n_games": n_games,
             "stones_per_team": stones_per_team,
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     trajectory_buffer = TrajectoryBuffer(BATCH_SIZE)
 
     learn_iters = 0
-    N = 5
+    N = 10
 
     team_1_rewards = []
     team_2_rewards = []
@@ -183,6 +183,25 @@ if __name__ == "__main__":
             learn_iters += 1
             trajectory_buffer.clear()
             print(f"Learning iteration {learn_iters} completed.")
+        
+        if game % 100 == 0:
+            policy.eval()
+            eval_rewards_1 = []
+            eval_rewards_2 = []
+            for _ in range(N):
+                with torch.no_grad():
+                    trajectory_buffer, game_info = collect_self_play_trajectory(env, policy, trajectory_buffer, device=device)
+                    eval_rewards_1.append(game_info['team1_reward'])
+                    eval_rewards_2.append(game_info['team2_reward'])
+            avg_eval_reward_1 = np.mean(np.array(eval_rewards_1))
+            avg_eval_reward_2 = np.mean(np.array(eval_rewards_2))
+            print(f"Evaluation over {N} games - Team 1 Avg Reward: {avg_eval_reward_1}, Team 2 Avg Reward: {avg_eval_reward_2}")
+            wandb.log({
+                "eval_team1_avg_reward": avg_eval_reward_1,
+                "eval_team2_avg_reward": avg_eval_reward_2,
+            })
+            trajectory_buffer.clear()
+            policy.train()
 
     # Save the trained model
     trainer.save(file_path)
@@ -196,7 +215,7 @@ if __name__ == "__main__":
     plt.ylabel('Reward')
     plt.title('Self-Play Rewards Over Time')
     plt.legend()
-    plt.savefig(f"plots/ppo_rewards_{n_games}_dist.png")
+    plt.savefig(f"plots/ppo_discrete_rewards_{n_games}_dist.png")
     plt.show()
 
     window = 50
@@ -210,7 +229,7 @@ if __name__ == "__main__":
     plt.ylabel('Reward')
     plt.title(f'Self-Play Rewards Moving Average (window={window})')
     plt.legend()
-    plt.savefig(f"plots/ppo_rewards_ma_{n_games}_dist.png")
+    plt.savefig(f"plots/ppo_discrete_rewards_ma_{n_games}_dist.png")
     plt.show()
 
     wandb.finish()
