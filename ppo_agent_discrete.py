@@ -45,8 +45,8 @@ class ActorCritic(nn.Module):
 
         # Action bounds for the curling environment
         # Speed, angle, spin
-        self.action_low = torch.tensor([2.8, 85, -3.0])
-        self.action_high = torch.tensor([3.2, 95, 3.0])
+        self.action_low = torch.tensor([3.4, 70, -10.0])
+        self.action_high = torch.tensor([4.2, 110, 10.0])
         self.n_bins = action_bin  # Number of bins per action dimension
         self.total_bins = sum(self.n_bins)
         self.action_scale = (self.action_high - self.action_low) / 2.0

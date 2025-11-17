@@ -192,9 +192,21 @@ def resolve_collision(a: Stone, b: Stone):
     b.moving = (b.v > 1e-3)
 
 
-def simulate(stones, dt=0.02, t_max=10.0):
+def out_detected(stone: Stone, xlim: tuple, ylim: tuple) -> bool:
+    """Return True if stone is out of bounds."""
+    return not (xlim[0] <= stone.x <= xlim[1] and ylim[0] <= stone.y <= ylim[1])
+
+
+def simulate(stones, dt=0.001, t_max=10.0):
     t = 0.0
     steps = 0
+    out_stones = [False] * len(stones)
+
+    button = (0.0, 34.747)
+    sheet_width = 4.75
+    xlim = (button[0] - sheet_width / 2.0, button[0] + sheet_width / 2.0)
+    ylim = (1.37, button[1] + 1.829)
+
     while t < t_max and any(s.moving for s in stones):
         for s in stones:
             update_stone_motion(s, dt)
@@ -206,13 +218,16 @@ def simulate(stones, dt=0.02, t_max=10.0):
                 if detect_collision(stones[i], stones[j]):
                     resolve_collision(stones[i], stones[j])
 
-        for s in stones:
+        for i, s in enumerate(stones):
             s.log()
+            if out_detected(s, xlim=xlim, ylim=ylim):
+                s.moving = False
+                out_stones[i] = True
 
         t += dt
         steps += 1
 
-    return steps
+    return steps, out_stones
 
 
 if __name__ == "__main__":
@@ -222,8 +237,8 @@ if __name__ == "__main__":
     print("mu_ice estimate:", estimate_mu_from_shot(v0, s_stop_measured))
 
     # quick two-stone sanity
-    s1 = Stone(x=-2, y=-0.02, v=1.5, psi=0.05, omega=+6.0)  # +omega is CW now
-    s2 = Stone(x=0.40, y=0.0, v=0.0, psi=0.0, omega=0.0)
-    simulate([s1, s2], dt=0.001, t_max=8.0)
+    s1 = Stone(x=0, y=1.37, v=3.4, psi=np.radians(110), omega=5.0)  # +omega is CW now
+    simulate([s1], dt=0.001, t_max=8.0)
+    button = (0.0, 34.747)
     print(s1.x, s1.y)
-    print(s2.x, s2.y)
+    print("Distance to button:", math.hypot(s1.x - button[0], s1.y - button[1]))

@@ -48,13 +48,13 @@ def collect_self_play_trajectory(env, policy: ActorCritic, buffer: TrajectoryBuf
         action = action.detach().numpy()
         log_prob = log_prob.detach().numpy()
         value = value.detach().numpy()
-        
+        buffer.add(state, action, log_prob, value, reward, done)
+
         if current_team == 0:
-            buffer.add(state, action, log_prob, value, reward[0], done)
-            team_1_rewards += reward[0]
+            
+            team_1_rewards += reward
         else:
-            buffer.add(state, action, log_prob, value, reward[1], done)
-            team_2_rewards += reward[1]
+            team_2_rewards += reward
 
         state = next_state
         current_team = env.current_team

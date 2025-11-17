@@ -36,7 +36,10 @@ def evaluate_parameters(params: tuple):
 
     # Simulate the stone's motion
     stones = [stone]
-    simulate(stones, dt=0.02, t_max=10.0)
+    _, out_detected = simulate(stones, dt=0.001, t_max=10.0)
+
+    if out_detected[0]:
+        return False
 
     button = (0.0, 34.747)
     sheet_width = 4.75
@@ -50,9 +53,9 @@ def evaluate_parameters(params: tuple):
 
 
 if __name__ == "__main__":
-    bd_low = (3.0, 70.0, -10.0)   # speed, angle, spin
-    bd_high = (4.5, 110.0, 10.0)
-    bd_steps = (15, 100, 50)
+    bd_low = (3.0, 60.0, -20.0)   # speed, angle, spin
+    bd_high = (4.5, 120.0, 20.0)
+    bd_steps = (20, 50, 50)
 
     param_grid = create_grid(bd_low, bd_high, bd_steps)
     print("Parameter combinations:")
@@ -60,7 +63,9 @@ if __name__ == "__main__":
 
     # Evaluate each parameter combination
     results = []
-    for params in param_grid:
+    for i, params in enumerate(param_grid):
+        if i % 5000 == 0:
+            print(f"Evaluating parameter set {i} / {len(param_grid)}")
         is_valid = evaluate_parameters(params)
         results.append((params, is_valid))
 

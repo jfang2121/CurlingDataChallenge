@@ -117,7 +117,7 @@ class CurlingEnv(gym.Env):
         all_stones = self.team_a_stones + self.team_b_stones + [new_stone]
         
         # Simulate the throw
-        simulate(all_stones, dt=0.001, t_max=30.0)
+        simulate(all_stones, dt=0.001, t_max=10.0)
         
         # Add the new stone to the appropriate team
         if self.current_team == 0:
@@ -133,27 +133,22 @@ class CurlingEnv(gym.Env):
         
         # Check if game is over
         terminated = (self.stones_thrown >= self.total_stones)
+        truncated = False
         self.done = terminated
         
         # Switch teams for next throw
         if not terminated:
-            if self.current_team == 0:
-                reward = (distance_reward, 0)
-            else:
-                reward = (0, distance_reward)
 
             self.current_team = 1 - self.current_team
-        else:
-            if self.current_team == 0:
-                reward = (distance_reward, 0)
-            else:
-                reward = (0, distance_reward)
+        
+        # Calculate reward
+        reward = distance_reward
 
         obs = self._get_observation()
         info = self._get_info()
-        
-        return obs, reward, terminated, info
-    
+
+        return obs, reward, terminated, truncated, info
+
     def _get_observation(self) -> np.ndarray:
         """
         Create observation vector containing all stone states.
@@ -289,9 +284,9 @@ class CurlingEnv(gym.Env):
                 print(f"  {i+1}. Position: ({stone.x:.2f}, {stone.y:.2f}), "
                       f"Distance to button: {dist:.2f}m")
 
-            scores = self._get_info()
-            print(f"\nScores - Team A: {scores['score_team_a']:.3f}, "
-                  f"Team B: {scores['score_team_b']:.3f}")
+            results = self._get_info()
+            print(f"\nResults - Team A: {results['results_team_a']:.3f}, "
+                  f"Team B: {results['results_team_b']:.3f}")
             print(f"{'='*50}\n")
 
 
