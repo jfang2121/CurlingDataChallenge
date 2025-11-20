@@ -136,16 +136,15 @@ class CurlingEnv(gym.Env):
         truncated = False
         self.done = terminated
         
-        # Switch teams for next throw
-        if not terminated:
-
-            self.current_team = 1 - self.current_team
-        
         # Calculate reward
         reward = distance_reward
 
         obs = self._get_observation()
         info = self._get_info()
+
+        # Switch teams for next throw
+        if not terminated:
+            self.current_team = 1 - self.current_team
 
         return obs, reward, terminated, truncated, info
 
